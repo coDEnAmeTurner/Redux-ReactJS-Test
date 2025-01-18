@@ -5,14 +5,27 @@ import App from './App';
 import reportWebVitals from './reportWebVitals';
 import { store } from './store';
 import {Provider} from 'react-redux';
+import { fetchUsers } from './features/users/usersSlice';
+import {BrowserRouter as Router, Routes, Route} from 'react-router-dom'
+import { fetchPosts } from './features/posts/postsSlice';
+
+store.dispatch(fetchUsers());
+
+//when F5, this file renders before all do, and it only fetches the users, not the posts, so 
+//if F5 without calling fetchPosts, there will be "Page not found" screen on display
+store.dispatch(fetchPosts());
 
 const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(
-  <React.StrictMode>
+  //StrictMode can cause your component logic to go insane
     <Provider store={store}>
-      <App />
+      <Router>
+        <Routes>
+          {/*this means /something_here will redirect to App component*/}
+          <Route path='/*' element={<App />}></Route>
+        </Routes>
+      </Router>
     </Provider>
-  </React.StrictMode>
 );
 
 // If you want to start measuring performance in your app, pass a function

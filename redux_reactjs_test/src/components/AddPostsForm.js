@@ -1,13 +1,15 @@
 import { useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
-import { addPosts } from "../features/posts/postsSlice";
+import { addNewPost } from "../features/posts/postsSlice";
 import { selectAllUsers } from "../features/users/usersSlice";
 import React from "react";
+import { useNavigate } from "react-router-dom";
 
 const AddPostsForm = () => {
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
   const [userId, setUserId] = useState("");
+  const [addRequestStatus, setAddRequestStatus] = useState("idle");
 
   const users = useSelector(selectAllUsers);
 
@@ -17,24 +19,35 @@ const AddPostsForm = () => {
 
   const dispatch = useDispatch();
 
+  const navigate = useNavigate()
+
+  const canSave =
+    [title, content, userId].every(Boolean) && addRequestStatus === "idle";
+
   const onSavePostClicked = () => {
-    if (title && content) {
-        dispatch(
-            addPosts(title, content, userId)
-        )
+    if (canSave) {
+      try {
+        setAddRequestStatus('pending')
+        //unwrap is a promise's function that either returns payload, or throws an error
+        dispatch(addNewPost({title, body: content, userId})).unwrap();
 
-        setTitle('')
-        setContent('')
+        setTitle("");
+        setContent("");
+        setUserId('');
+        navigate('/')
+      } catch (err) {
+        console.error("Failed to save the post", err);
+      } finally {
+        setAddRequestStatus("idle");
+      }
     }
-  }
+  };
 
-  const usersOptions = users.map(user=>(
+  const usersOptions = users.map((user) => (
     <option key={user.id} value={user.id}>
       {user.name}
     </option>
-  ))
-
-  const canSave = Boolean(title) && Boolean(content) && Boolean(userId)
+  ));
 
   return (
     <section>

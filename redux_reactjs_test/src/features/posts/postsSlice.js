@@ -1,4 +1,9 @@
-import { createSlice, nanoid, createAsyncThunk } from "@reduxjs/toolkit";
+import { 
+  createSlice, 
+  createAsyncThunk, 
+  createSelector ,
+  createEntityAdapter
+} from "@reduxjs/toolkit";
 //date support
 import { sub } from "date-fns";
 import axios from "axios";
@@ -6,11 +11,41 @@ import axios from "axios";
 //public site that provides APIs for placeholding
 const POSTS_URL = "https://jsonplaceholder.typicode.com/posts";
 
-const initialState = {
-  posts: [],
+//this with the initial state is the core of a concept known as Normalization
+//Normalization means: 
+//Items should be stored in a way that 
+//- there's no duplication of data
+//- there's a lookup structure for each item's id
+//Redux implementation for this is a State Shape that looks like this
+//{
+// posts: {
+//   ids: [1,2,3,...], ids lookup
+//   entities: { items store
+//     '1': {
+//       userId: 1,
+//       id: 1,
+//       title: something
+//     }
+//   }
+// }
+//}
+const postsAdapter = createEntityAdapter({
+  sortComparer: (a, b)=>b.date.localeCompare(a.date)
+})
+
+// const initialState = {
+//   posts: [],
+//   status: "idle", //idle | loading | succeeded | failed
+//   error: null,
+//   count: 0
+// };
+
+//postsAdapter.getInitialState already provides: the entities part, and the ids part
+const initialState = postsAdapter.getInitialState({
   status: "idle", //idle | loading | succeeded | failed
   error: null,
-};
+  count: 0
+});
 
 //in redux, define async method like this:
 export const fetchPosts = createAsyncThunk("posts/fetchPosts", async () => {
@@ -69,43 +104,19 @@ const postsSlice = createSlice({
   name: "posts",
   initialState,
   reducers: {
-    addPosts: {
-      //the state is the initialState
-      reducer(state, action) {
-        //.push will normally mutate the state.
-        // State Mutation means it is the content of the state that changes, not the state itself.
-        // If the state weren't to change, the component wouldn't render and that's not the desired behavior
-        // But with redux, it inherently uses ImmerJS, which makes .push not mutate the state
-        // instead assign a new value to the state.
-        state.posts.push(action.payload);
-      },
-      prepare(title, content, userId) {
-        return {
-          payload: {
-            id: nanoid(),
-            title,
-            //explicitly type "date" so that it won't follow the order
-            date: new Date().toISOString(),
-            content,
-            userId,
-            reactions: {
-              thumbsUp: 0,
-              wow: 0,
-              heart: 0,
-              rocket: 0,
-              coffee: 0,
-            },
-          },
-        };
-      },
-    },
     reactionAdded(state, action) {
       const { postId, reaction } = action.payload;
-      const existingPost = state.posts.find((post) => post.id === postId);
+      //const existingPost = state.posts.find((post) => post.id === postId);
+      //after Normalization:
+      const existingPost = state.entities[postId];
+      
       if (existingPost)
         //here's another occurence of not-mutating-the-state behaviour of ImmerJS
         existingPost.reactions[reaction]++;
     },
+    increaseCount(state, action) {
+      state.count += 1;
+    }
   },
   //these reducers are called according to the state of the above fetchedPosts promise
   extraReducers(builder) {
@@ -129,7 +140,9 @@ const postsSlice = createSlice({
           return post;
         });
 
-        state.posts = state.posts.concat(loadedPosts);
+        // state.posts = state.posts.concat(loadedPosts);
+        // after Normalization
+        postsAdapter.upsertMany(state, loadedPosts);
       })
       //action.error: the error from promise
       .addCase(fetchPosts.rejected, (state, action) => {
@@ -148,7 +161,9 @@ const postsSlice = createSlice({
           coffee: 0,
         };
         console.log(action.payload);
-        state.posts.push(action.payload);
+        // state.posts.push(action.payload);
+        // after Normalization
+        postsAdapter.addOne(state, action.payload);
       })
       .addCase(updatePost.fulfilled, (state, action) => {
         if (!action.payload?.id) {
@@ -158,10 +173,13 @@ const postsSlice = createSlice({
           return;
         }
         state.status = "succeeded";
-        const { id } = action.payload;
         action.payload.date = new Date().toISOString();
-        const posts = state.posts.filter((post) => post.id !== id);
-        state.posts = [...posts, action.payload];
+        // const { id } = action.payload;
+        // const posts = state.posts.filter((post) => post.id !== id);
+        // state.posts = [...posts, action.payload];
+        // after Normalization
+        postsAdapter.upsertOne(state, action.payload);
+
       })
       .addCase(deletePost.fulfilled, (state, action)=>{
         if (!action.payload?.id) {
@@ -170,20 +188,42 @@ const postsSlice = createSlice({
           return ;
         }
         const {id} =  action.payload;
-        const posts = state.posts.filter(post=>post.id !== id);
-        state.posts = posts;
+        // const posts = state.posts.filter(post=>post.id !== id);
+        // state.posts = posts;
+        // after Normalization
+        postsAdapter.removeOne(state, id)
       })
   },
 });
 
 //state.posts: return the "posts" reducer in createSlice
 //.posts again: return the initialState.posts array
-export const selectAllPosts = (state) => state.posts.posts;
+//these 2 selectors won't be needed after Normalization:
+// export const selectAllPosts = (state) => state.posts.posts;
+// export const selectPostsById = (state, postId) =>
+//   state.posts.posts.find((post) => post.id === postId);
+
+//the above 2 are replaced by pre-written selectors of adapter
+//getSelectors creates these selectors and we rename them with aliases using destructuring
+export const {
+  selectAll: selectAllPosts,
+  selectById: selectPostById,
+  selectIds: selectPostIds
+  // Pass in a selector that returns the posts slice of the state
+  //I thought state.posts ain't used any longer???????
+} = postsAdapter.getSelectors(state=>state.posts)
+
 export const getPostsStatus = (state) => state.posts.status;
 export const getPostsError = (state) => state.posts.error;
-export const selectPostsById = (state, postId) =>
-  state.posts.posts.find((post) => post.id === postId);
+export const getCount = (state) => state.posts.count;
 
-export const { addPosts, reactionAdded } = postsSlice.actions;
+//the statement to be passed to useSelector must always accept a state, 
+// ...then something else arbitrary
+export const selectPostsByUser = createSelector(
+  [selectAllPosts, (state, userId)=>userId],
+  (posts, userId)=>posts.filter(post=>post.userId === userId)
+)
+
+export const { reactionAdded, increaseCount } = postsSlice.actions;
 
 export default postsSlice.reducer;

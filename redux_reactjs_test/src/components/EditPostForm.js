@@ -1,13 +1,17 @@
 import { useState } from "react";
-import { useDispatch, useSelector } from "react-redux";
-import { reactionAdded, selectPostById, updatePost, deletePost } from "../features/posts/postsSlice";
+import { useSelector } from "react-redux";
+import { selectPostById } from "../features/posts/postsSlice";
 import { useParams, useNavigate } from "react-router-dom";
 import { selectAllUsers } from "../features/users/usersSlice";
+import { useDeletePostMutation, useUpdatePostMutation } from "../features/posts/postsSlice";
 import React from "react";
 
 const EditPostForm = () => {
   const { postId } = useParams();
   const navigate = useNavigate();
+
+  const [updatePost, {isLoading}] = useUpdatePostMutation()
+  const [deletePost] = useDeletePostMutation()
 
   const post = useSelector((state)=>selectPostById(state, Number(postId)))
   const users = useSelector(selectAllUsers);
@@ -15,9 +19,6 @@ const EditPostForm = () => {
   const [title, setTitle] = useState([post?.title]);
   const [content, setContent] = useState(post?.body);
   const [userId, setUserId] = useState(post?.userId);
-  const [requestStatus, setRequestStatus] = useState("idle");
-
-  const dispatch = useDispatch();
   
   if (!post) {
       return (<section>
@@ -30,24 +31,20 @@ const EditPostForm = () => {
   const onAuthorChanged = (e) => setUserId(Number(e.target.value));
 
   const canSave =
-    [title, content, userId].every(Boolean) && requestStatus === "idle";
+    [title, content, userId].every(Boolean) && !isLoading;
 
-  const onSavePostClicked = () => {
+  const onSavePostClicked = async () => {
     if (canSave) {
       try {
-        setRequestStatus("pending");
-        //unwrap is a promise's function that either returns payload, or throws an error
-        dispatch(updatePost({ id:post.id, title, body: content, userId, reactions: post.reactions })).unwrap();
 
+        await updatePost({id:post.id, title, body:content, userId}).unwrap()
         setTitle("");
         setContent("");
         setUserId("");
         navigate(`/post/${postId}`)
       } catch (err) {
         console.error("Failed to save the post", err);
-      } finally {
-        setRequestStatus("idle");
-      }
+      } 
     }
   };
 
@@ -57,12 +54,10 @@ const EditPostForm = () => {
     </option>
   ));
 
-  const onDeletePostClicked = () => {
+  const onDeletePostClicked = async () => {
     if (canSave) {
       try {
-        setRequestStatus("pending");
-        //unwrap is a promise's function that either returns payload, or throws an error
-        dispatch(deletePost({ id:post.id})).unwrap();
+        await deletePost({id:post.id}).unwrap()
 
         setTitle("");
         setContent("");
@@ -70,9 +65,7 @@ const EditPostForm = () => {
         navigate(`/`)
       } catch (err) {
         console.error("Failed to save the post", err);
-      } finally {
-        setRequestStatus("idle");
-      }
+      } 
     }
   };
 

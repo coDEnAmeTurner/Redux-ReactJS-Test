@@ -1,15 +1,14 @@
 import { useState } from "react";
-import { useDispatch, useSelector } from "react-redux";
-import { addNewPost } from "../features/posts/postsSlice";
+import { useSelector } from "react-redux";
 import { selectAllUsers } from "../features/users/usersSlice";
 import React from "react";
 import { useNavigate } from "react-router-dom";
+import { useAddNewPostMutation } from "../features/posts/postsSlice";
 
 const AddPostsForm = () => {
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
   const [userId, setUserId] = useState("");
-  const [addRequestStatus, setAddRequestStatus] = useState("idle");
 
   const users = useSelector(selectAllUsers);
 
@@ -17,19 +16,17 @@ const AddPostsForm = () => {
   const onContentChanged = (e) => setContent(e.target.value);
   const onAuthorChanged = (e) => setUserId(e.target.value);
 
-  const dispatch = useDispatch();
+  const [addNewPost, {isLoading}] = useAddNewPostMutation()
 
   const navigate = useNavigate()
 
   const canSave =
-    [title, content, userId].every(Boolean) && addRequestStatus === "idle";
+    [title, content, userId].every(Boolean) && !isLoading;
 
-  const onSavePostClicked = () => {
+  const onSavePostClicked = async () => {
     if (canSave) {
       try {
-        setAddRequestStatus('pending')
-        //unwrap is a promise's function that either returns payload, or throws an error
-        dispatch(addNewPost({title, body: content, userId})).unwrap();
+        await addNewPost({title, body: content, userId}).unwrap()
 
         setTitle("");
         setContent("");
@@ -37,9 +34,7 @@ const AddPostsForm = () => {
         navigate('/')
       } catch (err) {
         console.error("Failed to save the post", err);
-      } finally {
-        setAddRequestStatus("idle");
-      }
+      } 
     }
   };
 
